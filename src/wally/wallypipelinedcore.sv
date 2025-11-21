@@ -48,14 +48,45 @@ module wallypipelinedcore import cvw::*; #(parameter cvw_t P) (
    input  logic                  ExternalStall
 );
 
-  logic                          StallF, StallD, StallE, StallM, StallW;
-  logic                          FlushD, FlushE, FlushM, FlushW;
-  logic                          TrapM, RetM;
+  logic                          StallF, StallD, StallE, StallM, StallW;  // 这个是流水线全局信号
+  /*
+  output by: hzu (all)
+  input to: ifu (all), ieu (DEMW), lsu (MW), mdu (MW), fpu (EMW)
+  目的：保证当且级reg不被更新，前级被反压，指令留在流水线上等待资源或长操作结束（例如除法 DivBusyE、FPU FDivBusyE/FPUStallD、Cache/总线等待 IFUStallF/LSUStallM、结构/数据相关 StructuralStallD/LoadStallD）
+        Hazard 里通过 StallF/D/E/M/W 将停顿向前级传播，保证后级未腾出前，上级不注入新指令
+  - 解决长延迟，资源冲突问题
+  */
+  logic                          FlushD, FlushE, FlushM, FlushW;          // 也是全局的
+  /*
+  output by: hzu (all)
+  intput by: ifu (all), ieu (all), lsu (all), mdu (EMW), fpu (EMW)
+  目的：丢弃当前级的指令（将寄存器装载成空泡/无效），用来清除错误路径或异常后的指令。触发源包括 Trap/Ret、CSR 写/ fence、分支误判 BPWrongE，以及因下游是最后一个未停顿级需要清空前级的情况
+        Hazard 根据 FlushD/E/M/W 清空被影响的阶段，以确保错误路径上的指令不再提交
+  - 解决分支预测失败 / 异常处理问题
+  */
+  logic                          TrapM, RetM; // 属于权限管理，触发内核态，暂不考虑
 
   //  signals that must connect through DP
   logic                          IntDivE, W64E;
+  // IntDivE：Execute 阶段的控制位，表示当前指令是整数除法/取余类（div/divu/rem/remu）。它触发除法单元开始运算，并让 DivBusyE 拉高去阻塞流水
+  //          如果配置为用 FPU 分担除法，也会把这个信号送到 FPU 侧
+  //          output by: ieu
+  //          input to: mdu, fpu
+  // W64E：对于32位CPU，不存在W类指令，忽略
   logic                          CSRReadM, CSRWriteM, PrivilegedM;
+  /*
+  暂且不实现CSR，TODO
+  */
   logic [1:0]                    AtomicM;
+  /*
+  AtomicM: 是 IEU 在译码阶段识别到 A 扩展原子指令后随控制信号一路送到内存阶段的 2 位原子操作类型标记
+          output by: ieu
+          input to: lsu
+          - 译码：ieu 的 controller 的 AtomicD/AtomicE/AtomicM 控制位随其它控制信号进入 M 阶段 -> 它在 opcode=0101111 等 AMO/LR/SC 指令时被置位
+          - LSU 使用它选择原子读改写路径、对齐/溢出处理以及 HPTW/bus 分流；在无虚拟内存时直接传递为 LSUAtomicM
+          - 对外总线侧，AtomicM[1] 会标记该次总线事务为原子（例如非 cacheable 区域走 BusAtomic = AtomicM[1] & ~CacheableM，用于 AHB 接口/锁位
+          - 对内部 cache，AtomicM 也作为“本次访问是 AMO/LR/SC”的标志，驱动原子操作流水和异常/页面访问检查
+  */
   logic [P.XLEN-1:0]             ForwardedSrcAE, ForwardedSrcBE;
   logic [P.XLEN-1:0]             SrcAM;
   logic [2:0]                    Funct3E;
@@ -284,7 +315,7 @@ module wallypipelinedcore import cvw::*; #(parameter cvw_t P) (
     .StallF, .StallD, .StallE, .StallM, .StallW,
     .FlushD, .FlushE, .FlushM, .FlushW);
 
-  // privileged unit
+  // privileged unit，我们暂时不做，这个后期做
   if (P.ZICSR_SUPPORTED) begin:priv
     privileged #(P) priv(
       .clk, .reset,

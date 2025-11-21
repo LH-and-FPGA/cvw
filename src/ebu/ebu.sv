@@ -32,6 +32,21 @@
 // and limitations under the License.
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+/*
+External Bus Unit
+- 管理Core与Soc，外设，内存的模块
+- 实现AHB-Lite 协议
+- 作为Arbiter 和 Mux，协调IFU和LSU的总线请求
+- 功能：Arbitration & Merging
+    - 优先级规则：LSU 总是拥有高优先级
+    - 如果 LSU 和 IFU 同时请求总线，LSU 获胜。
+    - 如果 IFU 正在使用总线，而 LSU 来了请求，IFU 的操作可能会被暂停或延后（通过 IFUSave 和 IFURestore 机制）
+    - TODO: 为何要这样设计？
+*/
+
+
+
 module ebu import cvw::*;  #(parameter cvw_t P) (
   input  logic                clk, reset,
   // Signals from IFU
