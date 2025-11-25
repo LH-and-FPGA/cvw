@@ -76,7 +76,7 @@ module ifu import cvw::*;  #(parameter cvw_t P) (
   input  logic                 IllegalBaseInstrD,                        // Illegal non-compressed instruction
   input  logic                 IllegalFPUInstrD,                         // Illegal FP instruction
   output logic                 InstrPageFaultF,                          // Instruction page fault
-  output logic                 IllegalIEUFPUInstrD,                      // Illegal instruction including compressed & FP
+  output logic                 IllegalIEUFPUInstrD,                      // Illegal instruction including compressed & FP 不用的，因为我们不用支持C扩展
   output logic                 InstrMisalignedFaultM,                    // Branch target not aligned to 4 bytes if no compressed allowed (2 bytes if allowed)
   // mmu management
   input  logic [1:0]           PrivilegeModeW,                           // Privilege mode in Writeback stage
