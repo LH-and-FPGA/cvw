@@ -150,12 +150,19 @@ class spike(pluginTemplate):
       #TODO: The following assumes you are using the riscv-gcc toolchain. If
       #      not please change appropriately
       self.compile_cmd = self.compile_cmd+' -mabi='+('lp64 ' if 64 in ispec['supported_xlen'] else ('ilp32e ' if "E" in ispec["ISA"] else 'ilp32 '))
-      if 'pmp-grain' in ispec['PMP']:
-          # if the PMP granularity is specified in the isa yaml, then we use that value
-          # convert from G to bytes: g = 2^(G+2) bytes
-          self.granularity = pow(2, ispec['PMP']['pmp-grain']+2)
+      pmp_spec = ispec.get('PMP', {}) or {}
+      if 'pmp_granularity' in ispec:
+          grain = ispec['pmp_granularity']
+      elif isinstance(pmp_spec, dict) and 'pmp-grain' in pmp_spec:
+          grain = pmp_spec['pmp-grain']
       else:
-        self.granularity = 4  # default granularity is 4 bytes
+          grain = None
+
+      if grain is not None:
+          # convert from G to bytes: g = 2^(G+2) bytes
+          self.granularity = pow(2, grain + 2)
+      else:
+          self.granularity = 4  # default granularity is 4 bytes
 
     def runTests(self, testList):
 
